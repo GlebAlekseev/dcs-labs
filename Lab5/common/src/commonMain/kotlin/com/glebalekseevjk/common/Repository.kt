@@ -7,8 +7,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlin.math.*
 
-// TODO: Крайний случай
-
 class Repository(initData: Data = Data()) {
     private val dataState: StateFlow<Data>
         get() = _dataState
@@ -28,13 +26,8 @@ class Repository(initData: Data = Data()) {
             _dataState.collect {
                 val computationalGridInCylindricalCoordinatesX = mutableListOf<Double>()
                 val computationalGridInCylindricalCoordinatesY = mutableListOf<Double>()
-                // base
-                val alphaStep = 2*Math.PI / (dataState.value.numberOfPartitions)
-                for (j in 0 .. dataState.value.numberOfPartitions.toInt()){
-                    if (alphaStep * j + alphaStep/2 > Math.PI) continue
-                    computationalGridInCylindricalCoordinatesX.add(dataState.value.firstLayerThickness * cos(alphaStep * j + alphaStep/2))
-                    computationalGridInCylindricalCoordinatesY.add(dataState.value.firstLayerThickness * sin(alphaStep * j + alphaStep/2))
-                }
+
+                val layerList = mutableListOf(Layer(dataState.value.numberOfPartitions.toInt(), dataState.value.firstLayerThickness))
 
                 var prevDeltaRi = dataState.value.firstLayerThickness
                 var prevPrevRi = 0.0
@@ -57,14 +50,30 @@ class Repository(initData: Data = Data()) {
                     prevRi = ri
                     prevDeltaRi = deltaRi
                     // добавление на график нового слоя
-                    val step = Math.PI / (numberOfPartitions)
-                    if (prevRi > dataState.value.radius) break
-                    for (j in 0..(numberOfPartitions).toInt()){
-                        if (step * j + step/2 > Math.PI) continue
-                        computationalGridInCylindricalCoordinatesX.add(prevRi * cos(step * j + step/2))
-                        computationalGridInCylindricalCoordinatesY.add(prevRi * sin(step * j + step/2))
+                    layerList.add(Layer(numberOfPartitions.toInt(), deltaRi))
+                    if (prevRi >= dataState.value.radius) break
+                }
+
+                val maxRi = layerList.sumOf { it.deltaRi }
+                if (maxRi != dataState.value.radius){
+                    // корректировка
+                    fun getCorrectedDeltaRi(deltaRi: Double, ): Double = deltaRi - (maxRi - dataState.value.radius) / layerList.size.toDouble()
+                    layerList.forEach {
+                        it.deltaRi = getCorrectedDeltaRi(it.deltaRi)
                     }
                 }
+
+                var lastRi = 0.0
+                layerList.forEach {
+                    val step = Math.PI / (it.numberOfPartitions)
+                    val ri = (lastRi + it.deltaRi).also { lastRi = it }
+                    for (j in 0..it.numberOfPartitions){
+                        if (step * j + step / 2.0 > Math.PI) continue
+                        computationalGridInCylindricalCoordinatesX.add(ri * cos(step * j + step/2.0))
+                        computationalGridInCylindricalCoordinatesY.add(ri * sin(step * j + step/2.0))
+                    }
+                }
+
                 _resultDataState.emit(
                     ResultData(
                         Axis(computationalGridInCylindricalCoordinatesX, computationalGridInCylindricalCoordinatesY)
@@ -74,20 +83,22 @@ class Repository(initData: Data = Data()) {
         }
     }
 
-    fun getAlpha(i: Int) = 2.0*Math.PI / (dataState.value.numberOfPartitions + i - 1)
+    data class Layer(val numberOfPartitions: Int, var deltaRi: Double)
 
-    fun getKi(i: Int, deltaRi: Double, prevRi: Double) = (dataState.value.numberOfPartitions + i - 1) *
+    private fun getAlpha(i: Int) = 2.0*Math.PI / (dataState.value.numberOfPartitions + i - 1)
+
+    private fun getKi(i: Int, deltaRi: Double, prevRi: Double) = (dataState.value.numberOfPartitions + i - 1) *
             deltaRi / (2.0 * Math.PI * (prevRi + deltaRi))
 
-    fun getQ(prevRi: Double, ki: Double, prevDeltaRi: Double, prevPrevRi: Double, prevAlphaI: Double) = (4.0 * (prevRi.pow(2)) +
+    private fun getQ(prevRi: Double, ki: Double, prevDeltaRi: Double, prevPrevRi: Double, prevAlphaI: Double) = (4.0 * (prevRi.pow(2)) +
             3.0 * ki * prevDeltaRi * (2.0 * prevPrevRi + prevDeltaRi) * prevAlphaI) / 9.0
 
-    fun getR(prevRi: Double, ki: Double, prevDeltaRi: Double, prevPrevRi: Double, prevAlphaI: Double) = (16 * (prevRi.pow(3)) -
+    private fun getR(prevRi: Double, ki: Double, prevDeltaRi: Double, prevPrevRi: Double, prevAlphaI: Double) = (16 * (prevRi.pow(3)) -
             9 * ki * prevDeltaRi * (2 * prevPrevRi + prevDeltaRi) * prevRi * prevAlphaI) / 54.0
 
-    fun getDeltaR(q: Double, r: Double, prevRi: Double) = -2.0 * sqrt(q) * cos(1.0/3.0 * acos(r/ sqrt(q.pow(3))) + 2.0/3.0 * Math.PI) - 2.0/3.0 * prevRi
+    private fun getDeltaR(q: Double, r: Double, prevRi: Double) = -2.0 * sqrt(q) * cos(1.0/3.0 * acos(r/ sqrt(q.pow(3))) + 2.0/3.0 * Math.PI) - 2.0/3.0 * prevRi
 
-    fun conditionDeltaR(nextIterationDeltaRi: Double, iterationDeltaRi: Double) = EPS >
+    private fun conditionDeltaR(nextIterationDeltaRi: Double, iterationDeltaRi: Double) = EPS >
             ((nextIterationDeltaRi - iterationDeltaRi).absoluteValue / iterationDeltaRi.absoluteValue)
 
     companion object {
