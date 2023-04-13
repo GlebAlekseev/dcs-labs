@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
+import com.glebalekseevjk.common.roundToString
 import com.glebalekseevjk.common.ui.widget.data.Data
 import io.github.koalaplot.core.ChartLayout
 import io.github.koalaplot.core.Symbol
@@ -39,14 +40,14 @@ fun CombinedLineChartPlot(data: Data, modifier: Modifier = Modifier, title: Stri
                 if (data.isValid) (data.minX!!*1.1f..data.maxX!!*1.1f)
                 else (0.0..1.0),
                 minimumMajorTickSpacing = 25.dp,
-                minimumMajorTickIncrement = 0.1,
+                minimumMajorTickIncrement = 0.001,
                 minorTickCount = 1
             ),
             yAxisModel = LinearAxisModel(
                 if (data.isValid) (data.minY!! -10f..data.maxY!!*1.1f)
                 else (0.0..1.0),
                 minimumMajorTickSpacing = 50.dp,
-                minimumMajorTickIncrement = 100.0,
+                minimumMajorTickIncrement = 0.001,
                 minorTickCount = 1
             ),
             xAxisLabels = {
@@ -54,7 +55,7 @@ fun CombinedLineChartPlot(data: Data, modifier: Modifier = Modifier, title: Stri
             },
             xAxisTitle = { AxisTitle("x, м") },
             yAxisLabels = {
-                AxisLabel(it.toInt().toString(), Modifier.absolutePadding(right = 2.dp))
+                AxisLabel(it.roundToString(3), Modifier.absolutePadding(right = 2.dp))
             },
             yAxisTitle = {
                 AxisTitle(
